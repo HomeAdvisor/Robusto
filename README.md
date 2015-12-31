@@ -5,7 +5,9 @@ Java API Client Framework to quickly and easily build fault tolerant and robust 
 
 Please see the Wiki for full documentation.
 
-## Contact Us
+## Bugs and Feedback
+
+Please use the GitHub Issues page to submit feedback or problems.
 
 ## License
 
