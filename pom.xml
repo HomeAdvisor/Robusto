@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+   <modelVersion>4.0.0</modelVersion>
+   <groupId>com.homeadvisor</groupId>
+   <artifactId>robusto-core</artifactId>
+   <version>1.0.6-SNAPSHOT</version>
+   <name>HomeAdvisor Robusto - Core</name>
+   <description>Core library for building robust API clients with fault tolerance, retry, and monitoring</description>
+   <properties>
+      <hystrix.version>1.4.21</hystrix.version>
+      <spring.retry.version>1.1.2.RELEASE</spring.retry.version>
+      <additionalparam>-Xdoclint:none</additionalparam> <!-- for Java 8 -->
+   </properties>
+
+   <dependencies>
+       <!-- Netflix Hystrix -->
+      <dependency>
+         <groupId>com.netflix.hystrix</groupId>
+         <artifactId>hystrix-core</artifactId>
+         <version>${hystrix.version}</version>
+      </dependency>
+      <dependency>
+         <groupId>io.reactivex</groupId>
+         <artifactId>rxjava</artifactId>
+         <version>1.0.14</version>
+      </dependency>
+      <dependency>
+         <groupId>com.netflix.hystrix</groupId>
+         <artifactId>hystrix-codahale-metrics-publisher</artifactId>
+         <version>${hystrix.version}</version>
+         <exclusions>
+            <exclusion>
+               <groupId>com.codahale.metrics</groupId>
+               <artifactId>metrics-core</artifactId>
+            </exclusion>
+         </exclusions>
+      </dependency>
+      <dependency>
+         <groupId>com.netflix.hystrix</groupId>
+         <artifactId>hystrix-metrics-event-stream</artifactId>
+         <version>${hystrix.version}</version>
+      </dependency>
+
+      <!-- Spring Retry -->
+      <dependency>
+         <groupId>org.springframework.retry</groupId>
+         <artifactId>spring-retry</artifactId>
+         <version>${spring.retry.version}</version>
+      </dependency>
+
+      <dependency>
+         <groupId>org.slf4j</groupId>
+         <artifactId>slf4j-api</artifactId>
+         <version>1.7.7</version>
+      </dependency>
+
+      <dependency>
+         <groupId>org.powermock</groupId>
+         <artifactId>powermock-api-easymock</artifactId>
+         <version>1.6.1</version>
+         <scope>test</scope>
+      </dependency>
+      <dependency>
+         <groupId>org.powermock</groupId>
+         <artifactId>powermock-module-junit4</artifactId>
+         <version>1.6.1</version>
+         <scope>test</scope>
+      </dependency>
+      <dependency>
+         <groupId>junit</groupId>
+         <artifactId>junit</artifactId>
+         <version>4.12</version>
+         <scope>test</scope>
+      </dependency>
+   </dependencies>
+</project>
