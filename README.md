@@ -1,4 +1,4 @@
-# HomeAdvisor robusto
+# HomeAdvisor Robusto
 Java API Client Framework to quickly and easily build fault tolerant and robust API clients for a variety of applications.
 
 ## Documentation
@@ -11,7 +11,7 @@ Please use the GitHub Issues page to submit feedback or problems.
 
 ## License
 
-(c) 2015 HomeAdvisor, Inc.
+(c) 2016 HomeAdvisor, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
 
