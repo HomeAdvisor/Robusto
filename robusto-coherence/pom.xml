@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+   <modelVersion>4.0.0</modelVersion>
+   <groupId>com.servicemagic</groupId>
+   <artifactId>robusto-coherence</artifactId>
+   <version>1.0.0</version>
+   <name>HomeAdvisor Robusto - Coherence</name>
+   <description>Extension of API Client library that uses coherence for command caching</description>
+
+   <dependencies>
+      <dependency>
+         <groupId>com.homeadvisor</groupId>
+         <artifactId>robusto-core</artifactId>
+         <version>1.0.0</version>
+      </dependency>
+      <dependency>
+         <groupId>com.tangosol</groupId>
+         <artifactId>coherence</artifactId>
+         <version>3.7.1.9</version>
+      </dependency>
+   </dependencies>
+</project>
