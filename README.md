@@ -3,11 +3,11 @@ Java API Client Framework to quickly and easily build fault tolerant and robust 
 
 ## Documentation
 
-Please see the Wiki for full documentation.
+Please see the [Wiki](https://github.com/HomeAdvisor/Robusto/wiki) for full documentation.
 
 ## Bugs and Feedback
 
-Please use the GitHub Issues page to submit feedback or problems.
+Please use the [Issues](https://github.com/HomeAdvisor/Robusto/issues) page to submit feedback or problems.
 
 ## License
 
