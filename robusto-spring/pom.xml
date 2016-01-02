@@ -42,10 +42,4 @@
          <version>4.3.3</version>
       </dependency>
    </dependencies>
-
-   <scm>
-      <connection>scm:git:ssh://buildbox/export/home/git/ha-api-client-spring.git</connection>
-      <developerConnection>scm:git:ssh://buildbox/export/home/git/ha-api-client-spring.git</developerConnection>
-      <tag>HEAD</tag>
-   </scm>
 </project>
