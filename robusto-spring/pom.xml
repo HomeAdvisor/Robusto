@@ -5,7 +5,7 @@
    <groupId>com.homeadvisor</groupId>
    <artifactId>robusto-spring</artifactId>
    <version>1.0.0</version>
-   <name>API Client Library Framework - Spring</name>
+   <name>HomeAdvisor Robusto - Spring Rest Client</name>
    <description>Allows using Spring Rest as the HTTP provider for clients</description>
    <properties>
       <spring.version>4.1.6.RELEASE</spring.version>
