@@ -16,7 +16,7 @@
       <dependency>
          <groupId>com.homeadvisor</groupId>
          <artifactId>robusto-core</artifactId>
-         <version>1.0.5</version>
+         <version>1.0.0</version>
       </dependency>
       <dependency>
          <groupId>com.homeadvisor.correlation</groupId>
