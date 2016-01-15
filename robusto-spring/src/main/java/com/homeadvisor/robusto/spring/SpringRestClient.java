@@ -19,7 +19,6 @@ import com.homeadvisor.robusto.*;
 
 import com.homeadvisor.robusto.cache.CommandCache;
 import com.homeadvisor.robusto.spring.interceptor.AcceptHeaderInterceptor;
-import com.homeadvisor.robusto.spring.interceptor.CorrelationIDClientInterceptor;
 import com.homeadvisor.robusto.spring.interceptor.RequestResponseLogInterceptor;
 import com.netflix.hystrix.HystrixCommandProperties;
 import com.netflix.hystrix.HystrixThreadPool;
