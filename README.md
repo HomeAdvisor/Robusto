@@ -5,6 +5,10 @@ Java API Client Framework to quickly and easily build fault tolerant and robust 
 
 Please see the [Wiki](https://github.com/HomeAdvisor/Robusto/wiki) for full documentation.
 
+## Update Frequency
+
+HomeAdvisor works in 2 week development cycles. Once changes have passed QA testing they will be made available here.
+
 ## Bugs and Feedback
 
 Please use the [Issues](https://github.com/HomeAdvisor/Robusto/issues) page to submit feedback or problems.
