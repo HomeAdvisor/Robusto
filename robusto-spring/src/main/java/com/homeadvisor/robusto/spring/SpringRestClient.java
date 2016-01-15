@@ -115,11 +115,6 @@ public abstract class SpringRestClient extends AbstractApiClient
             // Add some standard interceptors for all clients
             //
 
-            if(getSpringConfiguration().isCorrelationEnabled())
-            {
-               restTemplate.getInterceptors().add(new CorrelationIDClientInterceptor());
-            }
-
             restTemplate.getInterceptors().add(new AcceptHeaderInterceptor(getSpringConfiguration().getDefaultAcceptTypes()));
             restTemplate.getInterceptors().add(new RequestResponseLogInterceptor(getConfiguration().isHttpLoggingDebug()));
          }
