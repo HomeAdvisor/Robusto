@@ -1,15 +1,10 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <parent>
-        <groupId>com.servicemagic</groupId>
-        <artifactId>sm-parent-pom</artifactId>
-        <version>1.0</version>
-        <relativePath>sm.parent.pom.xml</relativePath>
-    </parent>
+    
     <modelVersion>4.0.0</modelVersion>
     <artifactId>parent-pom</artifactId>
-    <version>1.1144-SNAPSHOT</version>
-    <name>HomeAdvisor Complete Aggregate POM</name>
-    <description>Aggregate POM for all HomeAdvisor projects.</description>
+    <version>1.0.0</version>
+    <name>Robusto Aggregate POM</name>
+    <description>Aggregate POM for Robusto Java API Client Framework</description>
     <packaging>pom</packaging>
 
     <modules>
