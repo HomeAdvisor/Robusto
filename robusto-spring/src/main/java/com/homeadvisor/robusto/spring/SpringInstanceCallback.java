@@ -59,11 +59,11 @@ public abstract class SpringInstanceCallback<T> implements RemoteServiceCallback
          if (hsce.getStatusCode()         == HttpStatus.REQUEST_TIMEOUT ||
              hsce.getStatusCode().value() >= 500)
          {
-            throw new RetryableApiCommandException("Remote server error", hsce);
+            throw new RetryableApiCommandException("Remote server error: " + hsce.getMessage(), hsce);
          }
          else
          {
-            throw new NonRetryableApiCommandException("Local client error", hsce);
+            throw new NonRetryableApiCommandException("Local client error: " + hsce.getMessage(), hsce);
          }
       }
 

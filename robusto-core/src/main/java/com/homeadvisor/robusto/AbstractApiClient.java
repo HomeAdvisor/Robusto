@@ -16,7 +16,9 @@
 package com.homeadvisor.robusto;
 
 import com.homeadvisor.robusto.cache.CommandCache;
+import com.homeadvisor.robusto.cache.CommandCacheConfig;
 import com.homeadvisor.robusto.cache.CommandCacheFactory;
+import com.homeadvisor.robusto.cache.HashMapCommandCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -208,6 +210,52 @@ public abstract class AbstractApiClient
       {
          LOG.error("Error configuring cache {}, this cache will not be used", name, e);
          return null;
+      }
+   }
+
+   /**
+    * Utility method to consistently log API failures. Extending clients can override
+    * if they don't like the format. By default this implementation will log the throwable
+    * message along with the command group name. The log level will be ERROR for
+    * {@link RetryableApiCommandException}s and WARN for all others.
+    * @param logger Logger to send message to.
+    * @param command ApiCommand that was executed or being constructed (may be null).
+    * @param throwable The exception to be logged.
+    */
+   protected void logCommandException(Logger logger, ApiCommand command, Throwable throwable)
+   {
+      StringBuilder sb = new StringBuilder("Exception executing command ");
+
+      //
+      // Log either the command group or service name to provide some context
+      //
+
+      if(command != null)
+      {
+         sb.append(command.getCommandGroup().name());
+      }
+      else
+      {
+         sb.append("[unknown command for service ").append(getServiceName()).append("]");
+      }
+
+      //
+      // Add the throwable message
+      //
+
+      sb.append("; ").append(throwable.getMessage());
+
+      //
+      // Ready to log
+      //
+
+      if(throwable instanceof RetryableApiCommandException)
+      {
+         logger.error(sb.toString(), throwable);
+      }
+      else
+      {
+         logger.warn(sb.toString());
       }
    }
 }

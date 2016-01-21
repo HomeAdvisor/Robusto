@@ -29,6 +29,7 @@ public class SpringClientConfiguration extends ClientConfiguration
    /**
     * Determine if correlation IDs should be added to outbound requests (default
     * is true).
+    * @deprecated Will be removed in future release.
     */
    private boolean correlationEnabled = true;
 
@@ -51,6 +52,10 @@ public class SpringClientConfiguration extends ClientConfiguration
    // Getters
    //
 
+   /**
+    * @deprecated Will be removed in future release.
+    */
+   @Deprecated
    public boolean isCorrelationEnabled()
    {
       return correlationEnabled;
