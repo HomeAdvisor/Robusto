@@ -9,6 +9,10 @@ Please see the [Wiki](https://github.com/HomeAdvisor/Robusto/wiki) for full docu
 
 HomeAdvisor works in 2 week development cycles. Once changes have passed QA testing they will be made available here.
 
+## Requirements
+
+The Robusto framework requires JDK 8 (we :heart: lambdas). The only required dependencies are Hystrix and Spring Retry, along with a few test frameworks. Each add-on module introduces additional dependencies, but those modules are optional and should only be included in your applications when needed.
+
 ## Bugs and Feedback
 
 Please use the [Issues](https://github.com/HomeAdvisor/Robusto/issues) page to submit feedback or problems.
