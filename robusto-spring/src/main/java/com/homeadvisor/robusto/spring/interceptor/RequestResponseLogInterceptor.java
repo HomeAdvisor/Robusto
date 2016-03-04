@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 HomeAdvisor, Inc.
+ * Copyright 2015 HomeAdvisor, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@ package com.homeadvisor.robusto.spring.interceptor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpRequest;
 import org.springframework.http.client.ClientHttpRequestExecution;
 import org.springframework.http.client.ClientHttpRequestInterceptor;
@@ -31,6 +33,7 @@ import java.io.InputStreamReader;
  * Implementation of {@link ClientHttpRequestInterceptor} that logs every
  * request and response.
  */
+@Order(1000)
 public class RequestResponseLogInterceptor implements ClientHttpRequestInterceptor
 {
    private static final Logger LOG = LoggerFactory.getLogger(RequestResponseLogInterceptor.class);
@@ -89,7 +92,10 @@ public class RequestResponseLogInterceptor implements ClientHttpRequestIntercept
       }
       catch(Exception e)
       {
-         LOG.error("Error logging request and response; message below may not be complete", e);
+         if(!useDebugLevel)
+         {
+            LOG.error("Error logging request and response; message content may not be complete [Error is {}]", e.getMessage());
+         }
       }
 
       if(useDebugLevel)

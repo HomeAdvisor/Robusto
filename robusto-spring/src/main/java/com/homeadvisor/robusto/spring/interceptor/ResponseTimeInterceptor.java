@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 HomeAdvisor, Inc.
+ * Copyright 2016 HomeAdvisor, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,9 @@
  */
 package com.homeadvisor.robusto.spring.interceptor;
 
-import org.apache.http.HttpHeaders;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpRequest;
 import org.springframework.http.client.ClientHttpRequestExecution;
@@ -24,34 +26,40 @@ import org.springframework.http.client.ClientHttpResponse;
 
 import java.io.IOException;
 
-import java.util.List;
-
 /**
- * Implementation of {@link ClientHttpRequestInterceptor} that sets the
- * proper accept headers on all requests. See {@link org.springframework.http.MediaType}
- * for proper formatting of values.
- * <br/><br/>
- * Note that if the passed in list is null or empty, the default Spring implementation
- * is used for accept headers.
+ * Implementation of {@link ClientHttpRequestInterceptor} that records the time it
+ * takes to get a response from the remote service.
  */
-@Order(-500)
-public class AcceptHeaderInterceptor implements ClientHttpRequestInterceptor
+@Order(0)
+public class ResponseTimeInterceptor implements ClientHttpRequestInterceptor
 {
-   private final List<String> mediaTypes;
+   private static final Logger LOG = LoggerFactory.getLogger(ResponseTimeInterceptor.class);
 
-   public AcceptHeaderInterceptor(List<String> mediaTypes)
+   private final boolean useDebug;
+
+   public ResponseTimeInterceptor(boolean useDebug)
    {
-      this.mediaTypes  = mediaTypes;
+      this.useDebug = useDebug;
    }
 
    @Override
    public ClientHttpResponse intercept(HttpRequest request, byte[] body, ClientHttpRequestExecution execution) throws IOException
    {
-      if(mediaTypes != null && mediaTypes.size() > 0)
+      long startTime = System.currentTimeMillis();
+
+      ClientHttpResponse response = execution.execute(request, body);
+
+      long endTime = System.currentTimeMillis();
+
+      if(useDebug)
       {
-         request.getHeaders().put(HttpHeaders.ACCEPT, mediaTypes);
+         LOG.debug("Request for {} took {} ms", request.getURI().toString(), endTime - startTime);
+      }
+      else
+      {
+         LOG.info("Request for {} took {} ms", request.getURI().toString(), endTime - startTime);
       }
 
-      return execution.execute(request, body);
+      return response;
    }
 }

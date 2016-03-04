@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 HomeAdvisor, Inc.
+ * Copyright 2015 HomeAdvisor, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,16 +21,25 @@ import com.homeadvisor.robusto.RetryableApiCommandException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResponseErrorHandler;
+import org.springframework.web.client.RestTemplate;
 
 /**
- * Extension of {@link RemoteServiceCallback} that runs handles Spring classes
- * of exceptions.
+ * Extension of {@link RemoteServiceCallback} that handles Spring classes
+ * of exceptions and wraps them in RetryableApiCommandException or
+ * NonRetryableApiCommandException types.
  */
 public abstract class SpringInstanceCallback<T> implements RemoteServiceCallback<T>
 {
+   private String commandName;
+
    public SpringInstanceCallback()
    {
+      this.commandName = "";
+   }
 
+   public SpringInstanceCallback(String commandName)
+   {
+      this.commandName = commandName;
    }
 
    /**
@@ -68,6 +77,16 @@ public abstract class SpringInstanceCallback<T> implements RemoteServiceCallback
       }
 
       return response;
+   }
+
+   protected void setCommandName(String commandName)
+   {
+      this.commandName = commandName;
+   }
+
+   protected String getCommandName()
+   {
+      return commandName;
    }
 
    /**

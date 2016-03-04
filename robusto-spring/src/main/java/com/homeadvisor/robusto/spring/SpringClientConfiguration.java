@@ -16,6 +16,16 @@
 package com.homeadvisor.robusto.spring;
 
 import com.homeadvisor.robusto.ClientConfiguration;
+import com.homeadvisor.robusto.spring.config.SpringCommandProperties;
+import com.homeadvisor.robusto.spring.config.SpringThreadPoolProperties;
+import com.netflix.hystrix.HystrixCommandKey;
+import com.netflix.hystrix.HystrixCommandProperties;
+import com.netflix.hystrix.HystrixThreadPoolKey;
+import com.netflix.hystrix.HystrixThreadPoolProperties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.StandardEnvironment;
 import org.springframework.http.MediaType;
 
 import java.util.Collections;
@@ -26,6 +36,33 @@ import java.util.List;
  */
 public class SpringClientConfiguration extends ClientConfiguration
 {
+   private final static Logger LOG = LoggerFactory.getLogger(SpringClientConfiguration.class);
+
+   private Environment environment;
+
+   private String configPrefix;
+
+   /**
+    * Initializes using a Spring {@link StandardEnvironment}.
+    * @deprecated Adding for backwards compatibility. Please use
+    * {@link #SpringClientConfiguration(Environment,String)} instead.
+    */
+   public SpringClientConfiguration()
+   {
+      environment = new StandardEnvironment();
+      configPrefix = "robusto";
+   }
+
+   /**
+    * Initializes using the provided Spring {@link Environment}.
+    * @param environment Spring Environment.
+    */
+   public SpringClientConfiguration(Environment environment, String configPrefix)
+   {
+      this.environment = environment;
+      this.configPrefix = configPrefix;
+   }
+
    /**
     * Determine if correlation IDs should be added to outbound requests (default
     * is true).
@@ -43,13 +80,111 @@ public class SpringClientConfiguration extends ClientConfiguration
    private List<String> defaultAcceptTypes = Collections.singletonList(MediaType.APPLICATION_JSON_VALUE);
 
    /**
-    * Number of command failures before the {@link com.homeadvisor.robusto.health.hystrix.HystrixHealthCheck}
-    * reports unhealthy.
+    * Default HTTP client connection timeout in ms (default 2000).
     */
-   private int hystrixHealthFailures = 1;
+   private int connectTimeout = 2000;
+
+   /**
+    * Default HTTP client request timeout in ms (default 2000).
+    */
+   private int requestTimeout = 2000;
+
+   /**
+    * Determine if all requests and subsequent responses should be logged at
+    * the DEBUG logging level (default is false). The logging will include
+    * headers and entity bodies for both requests and responses, so use with
+    * caution as log files may fill up fast.
+    */
+   private boolean httpLoggingDebug = true;
+
+   /**
+    * Determine if the client should log the time it takes to get a response
+    * at debug level.
+    * Default is true.
+    */
+   private boolean responseTimingDebug = true;
+
+   protected String getConfigPrefix()
+   {
+      return configPrefix;
+   }
+
+   protected void setConfigPrefix(String configPrefix)
+   {
+      this.configPrefix = configPrefix;
+   }
 
    //
-   // Getters
+   // Overrides for base API client configuration; check for settings in the
+   // environment first and fallback to base class as default.
+   //
+
+   /**
+    * Creates a new {@link SpringCommandProperties} for the given command name
+    * which will delegate all lookups to the environment.
+    * @param name Name of the command group.
+    * @return A {@link HystrixCommandProperties.Setter} for the given command
+    * name which can be used when building {@link
+    * com.homeadvisor.robusto.ApiCommand.Builder#withHystrixCommandProperties(HystrixCommandProperties.Setter) ApiCommands}.
+    */
+   @Override
+   protected HystrixCommandProperties.Setter buildCustomCommandProperties(String name)
+   {
+      return new SpringCommandProperties(
+            environment,
+            configPrefix,
+            HystrixCommandKey.Factory.asKey(name))
+            .createSetter();
+   }
+
+   @Override
+   protected HystrixThreadPoolProperties.Setter buildCustomThreadPoolProperties(String name)
+   {
+      return new SpringThreadPoolProperties(
+            environment,
+            configPrefix,
+            HystrixThreadPoolKey.Factory.asKey(name))
+            .createSetter();
+   }
+
+   @Override
+   public int getNumRetries()
+   {
+      return getProperty(getConfigPrefix() + ".client.numRetries", super.getNumRetries());
+   }
+
+   @Override
+   public int getNumRetries(String name)
+   {
+      return getProperty(getConfigPrefix() + ".client.command." + name.toLowerCase() + ".numRetries", getNumRetries());
+   }
+
+   @Override
+   public int getHystrixHealthNumFailures()
+   {
+      return getProperty(getConfigPrefix() + ".client.healthCheck.hystrix.minFailures", super.getHystrixHealthNumFailures());
+   }
+
+   @Override
+   public boolean isCacheEnabled(String cacheName)
+   {
+      return getProperty(getConfigPrefix() + ".client.cache." + cacheName + ".enabled", super.isCacheEnabled(cacheName));
+   }
+
+   @Override
+   public String getCacheType(String cacheName)
+   {
+      return getProperty(getConfigPrefix() + ".client.cache." + cacheName + ".type", super.getCacheType(cacheName));
+   }
+
+   @Override
+   public String getCacheConfig(String cacheName)
+   {
+      return getProperty(getConfigPrefix() + ".client.cache." + cacheName + ".config", super.getCacheConfig(cacheName));
+   }
+
+   //
+   // Spring Client specific settings
    //
 
    /**
@@ -63,11 +198,199 @@ public class SpringClientConfiguration extends ClientConfiguration
 
    public List<String> getDefaultAcceptTypes()
    {
-      return defaultAcceptTypes;
+      return getProperty(getConfigPrefix() + ".client.defaultAcceptTypes", defaultAcceptTypes);
    }
 
-   public int getHystrixHealthNumFailures()
+   public boolean isResponseTimingDebug()
    {
-      return hystrixHealthFailures;
+      return getProperty(getConfigPrefix() + ".client.responseTimingDebug", responseTimingDebug);
+   }
+
+   public int getConnectTimeout()
+   {
+      return getProperty(getConfigPrefix() + ".client.connectTimeout", connectTimeout);
+   }
+
+   public void setConnectTimeout(int connectTimeout)
+   {
+      this.connectTimeout = connectTimeout;
+   }
+
+   public int getRequestTimeout()
+   {
+      return getProperty(getConfigPrefix() + ".client.requestTimeout", requestTimeout);
+   }
+
+   public void setRequestTimeout(int requestTimeout)
+   {
+      this.requestTimeout = requestTimeout;
+   }
+
+   public boolean isHttpLoggingDebug()
+   {
+      return getProperty(getConfigPrefix() + ".client.httpLoggingDebug", httpLoggingDebug);
+   }
+
+   public void setHttpLoggingDebug(boolean httpLoggingDebug)
+   {
+      this.httpLoggingDebug = httpLoggingDebug;
+   }
+
+   /**
+    * Provide a way to get connect timeouts per command.
+    * @param name Logical command name. See {@link SpringRestClient#buildCommandGroupName()}.
+    * @return Connect timeout for that command, or the default.
+    */
+   public int getConnectTimeout(String name)
+   {
+      return getProperty(getConfigPrefix() + ".client.command." + name.toLowerCase() + ".connectTimeout", getConnectTimeout());
+   }
+
+   /**
+    * Provide a way to get request timeouts per command.
+    * @param name Logical command name. See {@link SpringRestClient#buildCommandGroupName()}.
+    * @return Request timeout for that command, or the default.
+    */
+   public int getRequestTimeout(String name)
+   {
+      return getProperty(getConfigPrefix() + ".client.command." + name.toLowerCase() + ".requestTimeout", getRequestTimeout());
+   }
+
+   //
+   // These are utility methods for getting config values from the Spring
+   // environment.
+   //
+
+   /**
+    * Utility method to get a property from the environment.
+    * @param name Property name
+    * @param defaultValue Default value if not found.
+    * @return Value of property if set, or default value if not set.
+    */
+   public String getProperty(String name, String defaultValue)
+   {
+      try
+      {
+         return environment.getProperty(name, defaultValue);
+      }
+      catch (Exception e)
+      {
+         LOG.warn("Error getting value for property {}", name, e);
+         return defaultValue;
+      }
+   }
+
+   /**
+    * Utility method to get a property from the environment as a Boolean.
+    * @param name Property name
+    * @param defaultValue Default value if not found.
+    * @return Value of property if set, or default value if not set.
+    */
+   public Boolean getProperty(String name, Boolean defaultValue)
+   {
+      try
+      {
+         return environment.getProperty(name, Boolean.class, defaultValue);
+      }
+      catch (Exception e)
+      {
+         LOG.warn("Error getting value for property {}", name, e);
+         return defaultValue;
+      }
+   }
+
+   /**
+    * Utility method to get a property from the environment as an Integer.
+    * @param name Property name
+    * @param defaultValue Default value if not found.
+    * @return Value of property if set, or default value if not set.
+    */
+   public Integer getProperty(String name, Integer defaultValue)
+   {
+      try
+      {
+         return environment.getProperty(name, Integer.class, defaultValue);
+      }
+      catch (Exception e)
+      {
+         LOG.warn("Error getting value for property {}", name, e);
+         return defaultValue;
+      }
+   }
+
+   /**
+    * Utility method to get a property from the environment as an Integer.
+    * @param name Property name
+    * @param defaultValue Default value if not found.
+    * @return Value of property if set, or default value if not set.
+    */
+   public Long getProperty(String name, Long defaultValue)
+   {
+      try
+      {
+         return environment.getProperty(name, Long.class, defaultValue);
+      }
+      catch (Exception e)
+      {
+         LOG.warn("Error getting value for property {}", name, e);
+         return defaultValue;
+      }
+   }
+
+   /**
+    * Utility method to get a property from the environment as a Float.
+    * @param name Property name
+    * @param defaultValue Default value if not found.
+    * @return Value of property if set, or default value if not set.
+    */
+   public Float getProperty(String name, Float defaultValue)
+   {
+      try
+      {
+         return environment.getProperty(name, Float.class, defaultValue);
+      }
+      catch (Exception e)
+      {
+         LOG.warn("Error getting value for property {}", name, e);
+         return defaultValue;
+      }
+   }
+
+   /**
+    * Utility method to get a property from the environment as a Double.
+    * @param name Property name
+    * @param defaultValue Default value if not found.
+    * @return Value of property if set, or default value if not set.
+    */
+   public Double getProperty(String name, Double defaultValue)
+   {
+      try
+      {
+         return environment.getProperty(name, Double.class, defaultValue);
+      }
+      catch (Exception e)
+      {
+         LOG.warn("Error getting value for property {}", name, e);
+         return defaultValue;
+      }
+   }
+
+   /**
+    * Utility method to get a property from the environment as a List.
+    * @param name Property name
+    * @param defaultValue Default value if not found.
+    * @return Value of property if set, or default value if not set.
+    */
+   public <T> List<T> getProperty(String name, List<T> defaultValue)
+   {
+      try
+      {
+         return environment.getProperty(name, List.class, defaultValue);
+      }
+      catch (Exception e)
+      {
+         LOG.warn("Error getting value for property {}", name, e);
+         return defaultValue;
+      }
    }
 }

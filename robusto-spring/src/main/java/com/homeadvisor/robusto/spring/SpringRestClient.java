@@ -18,21 +18,31 @@ package com.homeadvisor.robusto.spring;
 import com.homeadvisor.robusto.*;
 
 import com.homeadvisor.robusto.cache.CommandCache;
+import com.homeadvisor.robusto.spring.config.SpringCommandProperties;
+import com.homeadvisor.robusto.spring.config.SpringThreadPoolProperties;
 import com.homeadvisor.robusto.spring.interceptor.AcceptHeaderInterceptor;
 import com.homeadvisor.robusto.spring.interceptor.RequestResponseLogInterceptor;
+import com.homeadvisor.robusto.spring.interceptor.ResponseTimeInterceptor;
+import com.netflix.hystrix.HystrixCommandKey;
 import com.netflix.hystrix.HystrixCommandProperties;
+import com.netflix.hystrix.HystrixThreadPoolKey;
 import com.netflix.hystrix.HystrixThreadPoolProperties;
+import com.netflix.hystrix.strategy.HystrixPlugins;
+import com.netflix.hystrix.strategy.properties.HystrixPropertiesStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.client.BufferingClientHttpRequestFactory;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.annotation.AnnotationAwareOrderComparator;
+import org.springframework.core.env.Environment;
+import org.springframework.http.client.*;
 import org.springframework.retry.RetryListener;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
-import java.util.HashSet;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Base class for API clients that uses Spring Rest for invoking HTTP commands.
@@ -60,8 +70,23 @@ public abstract class SpringRestClient extends AbstractApiClient
 
    /**
     * Used to issue HTTP requests. Lazily intialized first time it is needed.
+    * This is the default RestTemplate used for all commands when no command
+    * specific timeouts have been specified. See {@link SpringClientConfiguration#getConnectTimeout(String) connect}
+    * and {@link SpringClientConfiguration#getRequestTimeout(String) request} timeouts.
     */
-   private RestTemplate restTemplate;
+   private RestTemplate defaultRestTemplate;
+
+   /**
+    * Reference to the Spring {@link Environment} for this application.
+    */
+   private Environment environment;
+
+   /**
+    * To allow multiple settings per command, we're taking the approach of maintaining
+    * multiple RestTemplate that are keyed by command name. The default RestTemplate
+    * should be used when no cutomization is needed for a command.
+    */
+   private final Map<String, RestTemplate> restTemplateMap = new HashMap<>();
 
    /**
     * Container for client configuration. Can be overridden by child classes tp
@@ -82,45 +107,63 @@ public abstract class SpringRestClient extends AbstractApiClient
       IGNORED_METHODS_FOR_COMMAND_NAME.add("getStackTrace");
       IGNORED_METHODS_FOR_COMMAND_NAME.add("buildCommandGroupName");
       IGNORED_METHODS_FOR_COMMAND_NAME.add("restCommand");
+      IGNORED_METHODS_FOR_COMMAND_NAME.add("getRestTemplate");
 
-      if(restTemplate == null)
+      try
       {
-         try
-         {
-            int connectTimeout = getConfiguration().getConnectTimeout();
-            int requestTimeout = getConfiguration().getRequestTimeout();
+         defaultRestTemplate = createRestTemplate(
+                  "default",
+                  getSpringConfiguration().getConnectTimeout(),
+                  getSpringConfiguration().getRequestTimeout()
+         );
 
-            LOG.info("Initializing RestTemplate with connect/read timeouts {}/{} ms", connectTimeout, requestTimeout);
-
-            //
-            // Update timeouts for underlying HTTP client
-            //
-
-            SimpleClientHttpRequestFactory scrf = new SimpleClientHttpRequestFactory();
-            scrf.setConnectTimeout(connectTimeout);
-            scrf.setReadTimeout(requestTimeout);
-
-            //
-            // Wrap the default request factory in a BufferingClientHttpRequestFactory
-            // which allows us to read response bodies multiple times. This is needed
-            // because some interceptors will need to consume the body before the final
-            // response gets to the caller.
-            //
-
-            restTemplate = new RestTemplate(new BufferingClientHttpRequestFactory(scrf));
-
-            //
-            // Add some standard interceptors for all clients
-            //
-
-            restTemplate.getInterceptors().add(new AcceptHeaderInterceptor(getSpringConfiguration().getDefaultAcceptTypes()));
-            restTemplate.getInterceptors().add(new RequestResponseLogInterceptor(getConfiguration().isHttpLoggingDebug()));
-         }
-         catch(Exception e)
-         {
-            LOG.error("Failed to initialize RestTemplate", e);
-         }
+         defaultRestTemplate.setInterceptors(createInterceptors().stream().collect(Collectors.toList()));
       }
+      catch(Exception e)
+      {
+         LOG.error("Failed to initialize default RestTemplate", e);
+      }
+   }
+
+   /**
+    * Extension point for plugging in different HTTP factories.
+    * @return Default is a {@link BufferingClientHttpRequestFactory}
+    */
+   protected ClientHttpRequestFactory createHttpFactory(
+         int connectTimeout,
+         int requestTimeout)
+   {
+      SimpleClientHttpRequestFactory scrf = new SimpleClientHttpRequestFactory();
+      scrf.setConnectTimeout(connectTimeout);
+      scrf.setReadTimeout(requestTimeout);
+
+      //
+      // Wrap the default request factory in a BufferingClientHttpRequestFactory
+      // which allows us to read response bodies multiple times. This is needed
+      // because some interceptors will need to consume the body before the final
+      // response gets to the caller.
+      //
+
+      return new BufferingClientHttpRequestFactory(scrf);
+   }
+
+   /**
+    * Creates the proper set of interceptors for this class. Extending classes that override this
+    * should consider calling this method first and then adding their
+    * own interceptors afterwards. This is because this method returns a TreeSet
+    * with interceptors ordered using the Spring AnnotationAwareOrderComparator so that
+    * interceptors are executed in a desired order.
+    * @return Set of client HTTP interceptors ordered using AnnotationAwareOrderComparator.
+    */
+   protected Set<ClientHttpRequestInterceptor> createInterceptors()
+   {
+      Set<ClientHttpRequestInterceptor> interceptors = new TreeSet<>(new AnnotationAwareOrderComparator());
+
+      interceptors.add(new AcceptHeaderInterceptor(getSpringConfiguration().getDefaultAcceptTypes()));
+      interceptors.add(new RequestResponseLogInterceptor(getSpringConfiguration().isHttpLoggingDebug()));
+      interceptors.add(new ResponseTimeInterceptor(getSpringConfiguration().isResponseTimingDebug()));
+
+      return interceptors;
    }
 
    @PreDestroy
@@ -165,7 +208,8 @@ public abstract class SpringRestClient extends AbstractApiClient
     * Utility method for building new {@link ApiCommand}s with most
     * of the boiler plate already setup. This method <em>MAY</em> do
     * command caching, but only if both cacheKey and commandCache
-    * are not null.
+    * are not null. Also uses the default command name as defined by
+    * {@link #buildCommandGroupName()}.
     * @param uriProvider Provider getting service URIs.
     * @param callback The callback to execute.
     * @param listener Optional spring retry listener to intercept retries.
@@ -181,17 +225,39 @@ public abstract class SpringRestClient extends AbstractApiClient
          CommandCache<?,?,?> commandCache
          )
    {
+      String commandName = buildCommandGroupName();
+      return restCommand(uriProvider, callback, listener, cacheKey, commandCache, commandName);
+   }
+
+   /**
+    * Utility method for building new {@link ApiCommand}s with most
+    * of the boiler plate already setup. This method <em>MAY</em> do
+    * command caching, but only if both cacheKey and commandCache
+    * are not null.
+    * @param uriProvider Provider getting service URIs.
+    * @param callback The callback to execute.
+    * @param listener Optional spring retry listener to intercept retries.
+    * @param cacheKey Optional key to use for the CommandCache.
+    * @param commandCache Optional CommandCache to use if desired.
+    * @param commandName Name to use for the hystrix command.
+    * @return Result of remote method call.
+    */
+   public <T> ApiCommand.Builder<T> restCommand(
+         UriProvider<T> uriProvider,
+         SpringInstanceCallback<T> callback,
+         RetryListener listener,
+         Object cacheKey,
+         CommandCache<?,?,?> commandCache,
+         String commandName
+   )
+   {
+      callback.setCommandName(commandName);
       return ApiCommand.<T>builder()
-            .withHystrixCommandProperties(HystrixCommandProperties.Setter()
-                  .withCircuitBreakerEnabled(getConfiguration().getHystrixCircuitBreakerEnabled())
-                  .withCircuitBreakerSleepWindowInMilliseconds(getConfiguration().getHystrixCircuitBreakerSleep())
-                  .withMetricsRollingPercentileBucketSize(getConfiguration().getHystrixMetricsWindowSize())
-                  .withExecutionTimeoutInMilliseconds(getConfiguration().getHystrixTimeout()))
-            .withHystrixThreadProperties(HystrixThreadPoolProperties.Setter()
-                  .withCoreSize(getConfiguration().getHystrixNumthreads()))
-            .withNumberOfRetries(getConfiguration().getNumRetries())
+            .withHystrixCommandProperties(getConfiguration().getHystrixCommandProperties(commandName))
+            .withHystrixThreadProperties(getConfiguration().getHystrixThreadPoolProperties(commandName))
+            .withNumberOfRetries(getConfiguration().getNumRetries(commandName))
             .withUriProvider(uriProvider)
-            .withCommandGroup(buildCommandGroupName())
+            .withCommandGroup(capitalizeName(getServiceName()) + "." + commandName)
             .withRetryListener(listener)
             .withRemoteServiceCallback(callback)
             .withCommandCache(commandCache, cacheKey);
@@ -199,12 +265,87 @@ public abstract class SpringRestClient extends AbstractApiClient
 
    /**
     * Return a fully intialized {@link RestTemplate} that can be used to
-    * invoke remote HTTP commands.
+    * invoke remote HTTP commands. This is configured with default timeouts.
     * @return Fully initialized RestTemplate.
     */
    public RestTemplate getRestTemplate()
    {
-      return restTemplate;
+      return defaultRestTemplate;
+   }
+
+   /**
+    * Return a fully intialized {@link RestTemplate} that can be used to
+    * invoke remote HTTP commands. This RestTemplate will be customized with
+    * connect and request timeouts for the given command if appropriate, or
+    * the default RestTemplate will be returned.
+    * @return Fully initialized RestTemplate.
+    */
+   public RestTemplate getRestTemplate(String commandName)
+   {
+      //
+      // See if the configuration specifies connect and request timeouts for the
+      // given command that differ from the defaults. If so, then lazily intialize
+      // a new RestTemplate with those values and use that. If the timesouts are
+      // the same as the default then we just return the default RestTemplate.
+      //
+
+      if(   getSpringConfiguration().getConnectTimeout(commandName) != getSpringConfiguration().getConnectTimeout()
+         || getSpringConfiguration().getRequestTimeout(commandName) != getSpringConfiguration().getRequestTimeout())
+      {
+         if(!restTemplateMap.containsKey(commandName))
+         {
+            try
+            {
+               RestTemplate restTemplate = createRestTemplate(
+                     commandName,
+                     getSpringConfiguration().getConnectTimeout(commandName),
+                     getSpringConfiguration().getRequestTimeout(commandName));
+
+               restTemplate.setInterceptors(createInterceptors().stream().collect(Collectors.toList()));
+
+               restTemplateMap.put(
+                     commandName,
+                     restTemplate);
+            }
+            catch (Exception e)
+            {
+               LOG.error("Unable to intialize new RestTemplate for command {}, default will be used", commandName, e);
+            }
+         }
+
+         //
+         // Shouldnt need the default value for the get() here unless something
+         // went haywire above.
+         //
+
+         return restTemplateMap.getOrDefault(commandName, defaultRestTemplate);
+      }
+
+      return defaultRestTemplate;
+   }
+
+   /**
+    * Creates a new {@link RestTemplate} with the given connect and request timeouts.
+    * The request factory used is specified by {@link #createHttpFactory(int, int)}.
+    * @param connectTimeout Connect timeout.
+    * @param requestTimeout Request timeout.
+    * @return New RestTemplate.
+    */
+   protected RestTemplate createRestTemplate(String commandName, int connectTimeout, int requestTimeout)
+   {
+      LOG.info(
+            "Creating new RestTemplate for {} command with connect/read timeouts of {}/{}",
+            commandName,
+            connectTimeout,
+            requestTimeout);
+
+      RestTemplate customRestTemplate =
+            new RestTemplate(
+                  createHttpFactory(
+                        connectTimeout,
+                        requestTimeout));
+
+      return customRestTemplate;
    }
 
    /**
@@ -216,8 +357,7 @@ public abstract class SpringRestClient extends AbstractApiClient
    {
       if(config == null)
       {
-         LOG.info("Creating new SpringClientConfiguration");
-         config = new SpringClientConfiguration();
+         config = new SpringClientConfiguration(environment, getConfigPrefix());
       }
       return config;
    }
@@ -251,20 +391,18 @@ public abstract class SpringRestClient extends AbstractApiClient
       // underscores, and periods to find other characters to capitalize.
       //
 
-      String prefix = capitalizeName(getServiceName());
-
       String suffix = "";
 
       for(StackTraceElement ste : Thread.currentThread().getStackTrace())
       {
          if(!IGNORED_METHODS_FOR_COMMAND_NAME.contains(ste.getMethodName()))
          {
-            suffix = "." + capitalizeName(ste.getMethodName());
+            suffix = capitalizeName(ste.getMethodName());
             break;
          }
       }
 
-      return prefix + suffix;
+      return suffix;
    }
 
    /**
@@ -301,5 +439,28 @@ public abstract class SpringRestClient extends AbstractApiClient
       }
 
       return sb.toString().intern();
+   }
+
+   /**
+    * By default we just use service name as the prefix to make naming
+    * a little more meaningful for properties, but the use can override
+    * this if they want. This is really useful if your application has
+    * multiple clients and you want to configure them individually.
+    * @return A string config prefix.
+    */
+   protected String getConfigPrefix()
+   {
+      return getServiceName();
+   }
+
+   @Autowired
+   public void setEnvironment(Environment environment)
+   {
+      this.environment = environment;
+   }
+
+   protected Environment getEnvironment()
+   {
+      return environment;
    }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 HomeAdvisor, Inc.
+ * Copyright 2015 HomeAdvisor, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package com.homeadvisor.robusto;
 
 import com.homeadvisor.robusto.cache.CommandCache;
 import com.netflix.hystrix.*;
+import com.netflix.hystrix.strategy.HystrixPlugins;
 import com.netflix.hystrix.strategy.concurrency.HystrixRequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -131,11 +132,10 @@ public class ApiCommand<T> extends HystrixCommand<T>
    public ApiCommand(Builder<T> builder)
    {
       super(Setter
-            //.withGroupKey(HystrixCommandGroupKey.Factory.asKey("Hystrix.ApiCommand"))
             .withGroupKey(HystrixCommandGroupKey.Factory.asKey(builder.commandGroup))
             .andCommandKey(HystrixCommandKey.Factory.asKey(builder.commandGroup))
             .andCommandPropertiesDefaults(builder.hystrixCommandProperties)
-            //.andThreadPoolKey(HystrixThreadPoolKey.Factory.asKey("ApiCommand." + builder.commandGroup))
+            .andThreadPoolKey(HystrixThreadPoolKey.Factory.asKey(builder.commandGroup))
             .andThreadPoolPropertiesDefaults(builder.hystrixThreadProperties)
       );
 
