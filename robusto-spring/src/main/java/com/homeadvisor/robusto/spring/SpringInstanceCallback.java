@@ -15,31 +15,41 @@
  */
 package com.homeadvisor.robusto.spring;
 
-import com.homeadvisor.robusto.NonRetryableApiCommandException;
-import com.homeadvisor.robusto.RemoteServiceCallback;
-import com.homeadvisor.robusto.RetryableApiCommandException;
+import com.homeadvisor.robusto.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResponseErrorHandler;
-import org.springframework.web.client.RestTemplate;
 
 /**
  * Extension of {@link RemoteServiceCallback} that handles Spring classes
  * of exceptions and wraps them in RetryableApiCommandException or
  * NonRetryableApiCommandException types.
+ * <br/><br/>
+ * This class implements {@link CommandNameAware} so that
+ * <br/><br/>
+ * This class also implements {@link CommandContextAware} so that implementors
+ * have access to the command context associated with the ApiCommand being
+ * executed.
  */
 public abstract class SpringInstanceCallback<T> implements RemoteServiceCallback<T>
 {
-   private String commandName;
+   private CommandContext ctx;
 
    public SpringInstanceCallback()
    {
-      this.commandName = "";
+
    }
 
+   /**
+    * Builds a SpringInstanceCallback with command name.
+    * @param commandName Command name
+    * @deprecated This will be removed in a future release. Command name
+    * should be retrieved from {@link #getContext()}/
+    */
+   @Deprecated
    public SpringInstanceCallback(String commandName)
    {
-      this.commandName = commandName;
+
    }
 
    /**
@@ -79,14 +89,34 @@ public abstract class SpringInstanceCallback<T> implements RemoteServiceCallback
       return response;
    }
 
+   /**
+    * @deprecated Use {@link #setContext(CommandContext)}.
+    */
+   @Deprecated
    protected void setCommandName(String commandName)
    {
-      this.commandName = commandName;
+      // No-op
    }
 
+   /**
+    * @deprecated Use {@link #getContext()}.
+    */
+   @Deprecated
    protected String getCommandName()
    {
-      return commandName;
+      return ctx != null ? ctx.getCommandName() : "ApiCommand";
+   }
+
+   @Override
+   public void setContext(CommandContext ctx)
+   {
+      this.ctx = ctx;
+   }
+
+   @Override
+   public CommandContext getContext()
+   {
+      return ctx;
    }
 
    /**

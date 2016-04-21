@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 HomeAdvisor, Inc.
+ * Copyright 2015 HomeAdvisor, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -107,10 +107,24 @@ public class ApiCommandTest extends TestCase
     */
    private class SuccessfulRemoteCallback implements RemoteServiceCallback
    {
+      CommandContext ctx;
+
       @Override
       public Object run(String url)
       {
          return new DummyDto();
+      }
+
+      @Override
+      public void setContext(CommandContext ctx)
+      {
+         this.ctx = ctx;
+      }
+
+      @Override
+      public CommandContext getContext()
+      {
+         return ctx;
       }
    }
 
@@ -119,11 +133,25 @@ public class ApiCommandTest extends TestCase
     */
    private class RetryableRemoteCallback implements RemoteServiceCallback
    {
+      CommandContext ctx;
+
       @Override
       public Object run(String url)
       {
          throw new RetryableApiCommandException("");
       }
+      @Override
+      public void setContext(CommandContext ctx)
+      {
+         this.ctx = ctx;
+      }
+
+      @Override
+      public CommandContext getContext()
+      {
+         return ctx;
+      }
+
    }
 
    /**
@@ -131,10 +159,24 @@ public class ApiCommandTest extends TestCase
     */
    private class NonRetryableRemoteCallback implements RemoteServiceCallback
    {
+      CommandContext ctx;
+
       @Override
       public Object run(String url)
       {
          throw new NonRetryableApiCommandException("");
+      }
+
+      @Override
+      public void setContext(CommandContext ctx)
+      {
+         this.ctx = ctx;
+      }
+
+      @Override
+      public CommandContext getContext()
+      {
+         return ctx;
       }
    }
 
@@ -144,6 +186,8 @@ public class ApiCommandTest extends TestCase
     */
    private class TimeoutRemoteCallback implements RemoteServiceCallback
    {
+      CommandContext ctx;
+
       private final long millis;
 
       public TimeoutRemoteCallback(long millis)
@@ -165,6 +209,18 @@ public class ApiCommandTest extends TestCase
 
          return null;
       }
+      @Override
+      public void setContext(CommandContext ctx)
+      {
+         this.ctx = ctx;
+      }
+
+      @Override
+      public CommandContext getContext()
+      {
+         return ctx;
+      }
+
    }
 
    /**
@@ -172,6 +228,8 @@ public class ApiCommandTest extends TestCase
     */
    private class FlakyRemoteServiceCallback implements RemoteServiceCallback
    {
+      CommandContext ctx;
+
       private final double pct;
 
       private final boolean retryable;
@@ -210,6 +268,18 @@ public class ApiCommandTest extends TestCase
                throw new NonRetryableApiCommandException("Failed to lookup URI - will NOT retry");
             }
          }
+      }
+
+      @Override
+      public void setContext(CommandContext ctx)
+      {
+         this.ctx = ctx;
+      }
+
+      @Override
+      public CommandContext getContext()
+      {
+         return ctx;
       }
    }
 

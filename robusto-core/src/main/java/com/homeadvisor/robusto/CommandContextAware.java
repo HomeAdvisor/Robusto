@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 HomeAdvisor, Inc.
+ * Copyright 2016 HomeAdvisor, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,11 @@
 package com.homeadvisor.robusto;
 
 /**
- * A generic interface that is used to pass URI information from a
- * {@link UriProvider} to the actual remote service call.
+ * Interface for objects which need knowledge of a {@link CommandContext}.
  */
-public interface RemoteServiceCallback<T> extends CommandContextAware
+public interface CommandContextAware
 {
-   T run(String url);
+   void setContext(CommandContext ctx);
+
+   CommandContext getContext();
 }

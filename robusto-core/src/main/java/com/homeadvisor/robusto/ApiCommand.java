@@ -17,8 +17,8 @@ package com.homeadvisor.robusto;
 
 import com.homeadvisor.robusto.cache.CommandCache;
 import com.netflix.hystrix.*;
-import com.netflix.hystrix.strategy.HystrixPlugins;
 import com.netflix.hystrix.strategy.concurrency.HystrixRequestContext;
+import com.netflix.hystrix.strategy.concurrency.HystrixRequestVariable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.retry.RetryCallback;
@@ -32,6 +32,7 @@ import org.springframework.retry.support.RetryTemplate;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Top level command for calling a remote API service. Commands should be
@@ -76,7 +77,7 @@ import java.util.Optional;
  * Note that various builders above have more configuration than is shown.
  * Suitable defaults are provided but can be overridden as needed.
  */
-public class ApiCommand<T> extends HystrixCommand<T>
+public class ApiCommand<T> extends HystrixCommand<T> implements CommandContext
 {
    private static final Logger LOG = LoggerFactory.getLogger(ApiCommand.class);
 
@@ -121,8 +122,24 @@ public class ApiCommand<T> extends HystrixCommand<T>
     * Do not set this directly. It will be set by ApiCommandExecutionHook
     * to ensure correlation IDs get copied from calling threads to Hystrix
     * threads.
+    * @deprecated This will be removed in future release. Please use the more
+    * generic attributes to pass data between threads.
     */
    public String correlationId = null;
+
+   /**
+    * Logical name of this command. Used to name/configure Hystrix thread pools and
+    * command settings.
+    */
+   private final String commandName;
+
+   /**
+    * Underlying map of variables from the builder class. Need to hold on to
+    * these because we cannot initialize the HystrixRequestVariableDefault
+    * until run() is called, because that's when the HystrixRequestContext
+    * is initialized.
+    */
+   private final ConcurrentHashMap<String, Object> attributes;
 
    /**
     * Initialize a new ApiCommand from a Builder. The builder will handle
@@ -146,7 +163,15 @@ public class ApiCommand<T> extends HystrixCommand<T>
       this.cacheKey               = builder.cacheKey;
 
       //
-      // Add a Spring retry listener to handle logging of failures
+      // Setup the fields that satisfy CommandContext
+      //
+
+      commandName = builder.commandGroup;
+      attributes = builder.attributes;
+      this.remoteServiceCallback.setContext(this);
+
+      //
+      // Add a Spring retry listener to handle logging of failures and retries
       //
 
       this.retryTemplate.registerListener(new ApiCommandLogger(this));
@@ -181,13 +206,13 @@ public class ApiCommand<T> extends HystrixCommand<T>
 
                      cacheResult = commandCache.getCache(cacheKey);
 
-                     if(cacheResult != null && cacheResult.isPresent())
+                     if(cacheResult != null)
                      {
                         //
                         // Ready to return cached result
                         //
 
-                        LOG.debug("Command cache hit, returning result from cache");
+                        LOG.debug("Command cache hit, returning result from cache [isPresent = {}]", cacheResult.isPresent());
 
                         return cacheResult.get();
                      }
@@ -235,6 +260,52 @@ public class ApiCommand<T> extends HystrixCommand<T>
       {
          hystrixContext.shutdown();
       }
+   }
+
+   /**
+    * Get the command name that was set from the {@link Builder#withCommandGroup(String)}.
+    * @return Command name.
+    */
+   public String getCommandName()
+   {
+      return commandName;
+   }
+
+   /**
+    * Looks up the value associated with the given key from the attributes.
+    * @param key Key to lookup in command data map.
+    * @return Value associated with the given key, or null if none was set.
+    */
+   public Object getCommandAttribute(String key)
+   {
+      Object val = attributes.getOrDefault(key, null);
+
+      LOG.debug("Returning attribute {}/{} for command {}", key, val, commandName);
+
+      return val;
+   }
+
+   /**
+    * Sets the given key/value pair for the underlying command attributes. Will
+    * overwrite existing key if it exists.
+    * @param key Key name to use.
+    * @param val Value to associate with the key.
+    */
+   public void setCommandAttribute(String key, Object val)
+   {
+      LOG.debug("Setting attribute {}/{} for command {}", key, val, commandName);
+      attributes.put(key, val);
+   }
+
+   /**
+    * Removes the given key, if it exists, from the underlying command attributes.
+    * this is a no-op if the key doesn't exist.
+    * @param key Key to remove.
+    */
+   public void removeCommandAttribute(String key)
+   {
+      LOG.debug("Removing attribute {} for command {}", key, commandName);
+      attributes.remove(key);
    }
 
    /**
@@ -316,6 +387,15 @@ public class ApiCommand<T> extends HystrixCommand<T>
       protected CommandCache<?, ?, ?> commandCache = null;
 
       protected Object cacheKey = null;
+
+      //
+      // This map allows you to pass data from the calling thread to the
+      // hystrix thread, via HystrixRequestVariable. Not to be confused
+      // with HystrixCommandProperties. This will get set onto the ApiCommand's
+      // HystrixRequestVariable.
+      //
+
+      protected ConcurrentHashMap<String, Object> attributes = new ConcurrentHashMap<>();
 
       public Builder()
       {
@@ -530,6 +610,21 @@ public class ApiCommand<T> extends HystrixCommand<T>
       public Builder<T> withCircuitBreakerEnabled(boolean circuitBreakerEnabled)
       {
          this.hystrixCommandProperties.withCircuitBreakerEnabled(circuitBreakerEnabled);
+         return this;
+      }
+
+      /**
+       * <i>Optional.</i> Adds a new key/value pair to the underyling {@link HystrixRequestVariable}.
+       * This object maintains a ConcurrentHashMap and allows you to pass arbitrary
+       * key/value pairs from the calling thread and make them available inside the
+       * {@link RemoteServiceCallback} on the Hystrix thread.
+       * @param key Key to lookup variable later.
+       * @param val Value to set for the given key.
+       * @return Builder
+       */
+      public Builder<T> withCommandVariable(String key, Object val)
+      {
+         attributes.put(key, val);
          return this;
       }
 

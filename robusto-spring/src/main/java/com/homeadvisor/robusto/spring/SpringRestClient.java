@@ -16,25 +16,19 @@
 package com.homeadvisor.robusto.spring;
 
 import com.homeadvisor.robusto.*;
-
 import com.homeadvisor.robusto.cache.CommandCache;
-import com.homeadvisor.robusto.spring.config.SpringCommandProperties;
-import com.homeadvisor.robusto.spring.config.SpringThreadPoolProperties;
 import com.homeadvisor.robusto.spring.interceptor.AcceptHeaderInterceptor;
 import com.homeadvisor.robusto.spring.interceptor.RequestResponseLogInterceptor;
 import com.homeadvisor.robusto.spring.interceptor.ResponseTimeInterceptor;
-import com.netflix.hystrix.HystrixCommandKey;
-import com.netflix.hystrix.HystrixCommandProperties;
-import com.netflix.hystrix.HystrixThreadPoolKey;
-import com.netflix.hystrix.HystrixThreadPoolProperties;
-import com.netflix.hystrix.strategy.HystrixPlugins;
-import com.netflix.hystrix.strategy.properties.HystrixPropertiesStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.core.env.Environment;
-import org.springframework.http.client.*;
+import org.springframework.http.client.BufferingClientHttpRequestFactory;
+import org.springframework.http.client.ClientHttpRequestFactory;
+import org.springframework.http.client.ClientHttpRequestInterceptor;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.retry.RetryListener;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
@@ -57,7 +51,14 @@ public abstract class SpringRestClient extends AbstractApiClient
     * #buildCommandGroupName()}. These delimeters will not show up in the final
     * command name, and will be used to identity characters that will made capital.
     */
-   private final static HashSet<Character> SERVICE_NAME_DELIMIETERS = new HashSet<>();
+   private final static Set<Character> SERVICE_NAME_DELIMIETERS =
+      Collections.unmodifiableSet(
+         new HashSet<>(
+            Arrays.asList(
+               '-',
+               '.',
+               '_'
+            )));
 
    /**
     * A set of method names to ignore when trying to build a useful command
@@ -66,7 +67,16 @@ public abstract class SpringRestClient extends AbstractApiClient
     * will ignore Thread.getStackTrace(), SpringRestClient.buildCommandGroupName,
     * and any of the restCommand helper methods.
     */
-   private final static HashSet<String> IGNORED_METHODS_FOR_COMMAND_NAME = new HashSet<>();
+   private final static Set<String> IGNORED_METHODS_FOR_COMMAND_NAME =
+      Collections.unmodifiableSet(
+         new HashSet<>(
+            Arrays.asList(
+               "getStackTrace",
+               "buildCommandGroupName",
+               "restCommand",
+               "restTemplateCommand",
+               "getRestTemplate"
+            )));
 
    /**
     * Used to issue HTTP requests. Lazily intialized first time it is needed.
@@ -100,15 +110,6 @@ public abstract class SpringRestClient extends AbstractApiClient
    @PostConstruct
    protected void setup() throws Exception
    {
-      SERVICE_NAME_DELIMIETERS.add('-');
-      SERVICE_NAME_DELIMIETERS.add('.');
-      SERVICE_NAME_DELIMIETERS.add('_');
-
-      IGNORED_METHODS_FOR_COMMAND_NAME.add("getStackTrace");
-      IGNORED_METHODS_FOR_COMMAND_NAME.add("buildCommandGroupName");
-      IGNORED_METHODS_FOR_COMMAND_NAME.add("restCommand");
-      IGNORED_METHODS_FOR_COMMAND_NAME.add("getRestTemplate");
-
       try
       {
          defaultRestTemplate = createRestTemplate(
@@ -172,6 +173,13 @@ public abstract class SpringRestClient extends AbstractApiClient
       // Nothing to do
    }
 
+   public <T> ApiCommand.Builder<T> restTemplateCommand(UriProvider<T> uriProvider,
+                                                        RestTemplateInvoker<T> invoker)
+   {
+      return restCommand(uriProvider, new RestTemplateCallback<>(invoker));
+   }
+
+
    /**
     * Utility method for building new {@link ApiCommand}s with most
     * of the boiler plate already setup. This method will <em>NOT</em>
@@ -182,7 +190,7 @@ public abstract class SpringRestClient extends AbstractApiClient
     */
    public <T> ApiCommand.Builder<T> restCommand(
          UriProvider<T> uriProvider,
-         SpringInstanceCallback<T> callback)
+         RemoteServiceCallback<T> callback)
    {
       return restCommand(uriProvider, callback, null);
    }
@@ -198,7 +206,7 @@ public abstract class SpringRestClient extends AbstractApiClient
     */
    public <T> ApiCommand.Builder<T> restCommand(
          UriProvider<T> uriProvider,
-         SpringInstanceCallback<T> callback,
+         RemoteServiceCallback<T> callback,
          RetryListener listener)
    {
       return restCommand(uriProvider, callback, listener, null, null);
@@ -219,7 +227,7 @@ public abstract class SpringRestClient extends AbstractApiClient
     */
    public <T> ApiCommand.Builder<T> restCommand(
          UriProvider<T> uriProvider,
-         SpringInstanceCallback<T> callback,
+         RemoteServiceCallback<T> callback,
          RetryListener listener,
          Object cacheKey,
          CommandCache<?,?,?> commandCache
@@ -244,14 +252,17 @@ public abstract class SpringRestClient extends AbstractApiClient
     */
    public <T> ApiCommand.Builder<T> restCommand(
          UriProvider<T> uriProvider,
-         SpringInstanceCallback<T> callback,
+         RemoteServiceCallback<T> callback,
          RetryListener listener,
          Object cacheKey,
          CommandCache<?,?,?> commandCache,
          String commandName
    )
    {
-      callback.setCommandName(commandName);
+      if (callback instanceof RestTemplateAware)
+      {
+         ((RestTemplateAware)callback).setRestTemplate(getRestTemplate(commandName));
+      }
       return ApiCommand.<T>builder()
             .withHystrixCommandProperties(getConfiguration().getHystrixCommandProperties(commandName))
             .withHystrixThreadProperties(getConfiguration().getHystrixThreadPoolProperties(commandName))
@@ -318,10 +329,10 @@ public abstract class SpringRestClient extends AbstractApiClient
          // went haywire above.
          //
 
-         return restTemplateMap.getOrDefault(commandName, defaultRestTemplate);
+         return restTemplateMap.getOrDefault(commandName, getRestTemplate());
       }
 
-      return defaultRestTemplate;
+      return getRestTemplate();
    }
 
    /**
