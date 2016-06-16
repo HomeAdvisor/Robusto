@@ -29,6 +29,8 @@ import org.springframework.http.client.BufferingClientHttpRequestFactory;
 import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.http.client.ClientHttpRequestInterceptor;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.retry.RetryListener;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
@@ -99,7 +101,7 @@ public abstract class SpringRestClient extends AbstractApiClient
    private final Map<String, RestTemplate> restTemplateMap = new HashMap<>();
 
    /**
-    * Container for client configuration. Can be overridden by child classes tp
+    * Container for client configuration. Can be overridden by child classes to
     * plug in metrics from different sources.
     */
    protected SpringClientConfiguration config;
@@ -355,6 +357,21 @@ public abstract class SpringRestClient extends AbstractApiClient
                   createHttpFactory(
                         connectTimeout,
                         requestTimeout));
+
+      //
+      // RestTemplate creates a MappingJackson2HttpMessageConverter by default, and
+      // we want to swap out the default ObjectMapper with our own.
+      //
+
+      for (int i = 0; i < customRestTemplate.getMessageConverters().size(); i++)
+      {
+         final HttpMessageConverter<?> httpMessageConverter = customRestTemplate.getMessageConverters().get(i);
+         if (httpMessageConverter instanceof MappingJackson2HttpMessageConverter)
+         {
+            ((MappingJackson2HttpMessageConverter)httpMessageConverter).setObjectMapper(
+                  getSpringConfiguration().buildCustomJacksonObjectMapper(commandName));
+         }
+      }
 
       return customRestTemplate;
    }

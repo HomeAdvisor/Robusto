@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 HomeAdvisor, Inc.
+ * Copyright 2016 HomeAdvisor, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.*;
 
 /**
  * Top level command for calling a remote API service. Commands should be
@@ -50,7 +51,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * ApiCommand<CustomDTO> command = restCommand(
  *   new ConstantUriProvider("http://somehost.com/"),
- *   new SpringInstanceCallback()
+ *   new SpringInstanceCallback<CustomDTO>()
  *   {
  *   @Override
  *      public CustomDTO runWithUrl(String url)
@@ -142,6 +143,27 @@ public class ApiCommand<T> extends HystrixCommand<T> implements CommandContext
    private final ConcurrentHashMap<String, Object> attributes;
 
    /**
+    * Optional interceptor to fire if we end up looking up in the command
+    * cache. Similar concept to the retryInterceptor Function.
+    */
+   private final Function<Supplier<Optional<T>>, Optional<T>> cacheInterceptor;
+
+   /**
+    * Mechanism that allows you to wrap the command execution in your own code,
+    * for example to perform timing or logging operations. The interceptor will
+    * be passed the {@link RemoteServiceCallback#run(String)} from each iteration
+    * of the main command retry loop (including the first invocation). Your
+    * interceptor should simply execute the Supplier and return its result, along
+    * with any other operations you perform.
+    * <br/><br/>
+    * Warning! Your operations (logging, timing, etc) will be part of the main
+    * Hystrix command execution, so make sure you account for them when setting
+    * command timeouts. Try to keep your operations as quick as possible and
+    * consider offloading them to asynchronous mechanisms whenever possible.
+    */
+   private final Function<Supplier<T>, T> retryInterceptor;
+
+   /**
     * Initialize a new ApiCommand from a Builder. The builder will handle
     * validation of parameters.
     * @param builder Builder
@@ -161,6 +183,8 @@ public class ApiCommand<T> extends HystrixCommand<T> implements CommandContext
       this.retryTemplate          = builder.retryTemplate;
       this.commandCache           = builder.commandCache;
       this.cacheKey               = builder.cacheKey;
+      this.cacheInterceptor       = builder.cacheInterceptor;
+      this.retryInterceptor       = builder.retryInterceptor;
 
       //
       // Setup the fields that satisfy CommandContext
@@ -204,7 +228,14 @@ public class ApiCommand<T> extends HystrixCommand<T> implements CommandContext
                   {
                      LOG.debug("Attempting lookup of key {} from command cache", cacheKey.toString());
 
-                     cacheResult = commandCache.getCache(cacheKey);
+                     if(cacheInterceptor != null)
+                     {
+                        cacheResult = cacheInterceptor.apply(() -> commandCache.getCache(cacheKey));
+                     }
+                     else
+                     {
+                        cacheResult = commandCache.getCache(cacheKey);
+                     }
 
                      if(cacheResult != null)
                      {
@@ -227,7 +258,16 @@ public class ApiCommand<T> extends HystrixCommand<T> implements CommandContext
                   // so we have to invoke the remote call.
                   //
 
-                  T result = uriProvider.execute(remoteServiceCallback);
+                  T result = null;
+
+                  if(retryInterceptor != null)
+                  {
+                     result = retryInterceptor.apply(() -> uriProvider.execute(remoteServiceCallback));
+                  }
+                  else
+                  {
+                     result = uriProvider.execute(remoteServiceCallback);
+                  }
 
                   //
                   // Put the result in the cache if applicable. This is wrapped
@@ -293,8 +333,15 @@ public class ApiCommand<T> extends HystrixCommand<T> implements CommandContext
     */
    public void setCommandAttribute(String key, Object val)
    {
-      LOG.debug("Setting attribute {}/{} for command {}", key, val, commandName);
-      attributes.put(key, val);
+      if(key != null && val != null)
+      {
+         LOG.debug("Setting attribute {}/{} for command {}", key, val, commandName);
+         attributes.put(key, val);
+      }
+      else
+      {
+         LOG.debug("Not setting attribute {}/{} for command {} due to NULL", key, val, commandName);
+      }
    }
 
    /**
@@ -396,6 +443,14 @@ public class ApiCommand<T> extends HystrixCommand<T> implements CommandContext
       //
 
       protected ConcurrentHashMap<String, Object> attributes = new ConcurrentHashMap<>();
+
+      //
+      // Interceptors for command execution (optional)
+      //
+
+      protected Function<Supplier<Optional<T>>, Optional<T>> cacheInterceptor = null;
+
+      protected Function<Supplier<T>, T> retryInterceptor = null;
 
       public Builder()
       {
@@ -625,6 +680,44 @@ public class ApiCommand<T> extends HystrixCommand<T> implements CommandContext
       public Builder<T> withCommandVariable(String key, Object val)
       {
          attributes.put(key, val);
+         return this;
+      }
+
+      /**
+       * <i>Optional.</i> This mechanism is used to intercept every invocation of the
+       * {@link CommandCache} operations (get and put). It gives you a chance to
+       * do anything you like such as logging, timing, etc. Make sure that whatever
+       * you do, it does not require a lot of time as it counts towards the overall
+       * Hystrix retry time.
+       * @param cacheInterceptor A Function that will be passed in the the CommandCache
+       *                         that needs executing. It is the responsibility of the
+       *                         Function to execute the supplier and return its result
+       *                         in addition to anything else that it needs to do (logging,
+       *                         timing, etc).
+       * @return Builder
+       */
+      public Builder<T> withCacheInterceptor(Function<Supplier<Optional<T>>, Optional<T>> cacheInterceptor)
+      {
+         this.cacheInterceptor = cacheInterceptor;
+         return this;
+      }
+
+      /**
+       * <i>Optional.</i> This mechanism is used to intercept every invocation of the
+       * main command retry loop, including the initial try. It gives you a chance to
+       * do anything you like before or after the execution of the {@link UriProvider}
+       * such as logging, timing, etc. Make sure that whatever you do, it does not
+       * require a lot of time as it counts towards the overall Hystrix retry time.
+       * @param retryInterceptor A Function that will be passed in the the UriProvider
+       *                         that needs executing. It is the responsibility of the
+       *                         Function to execute the supplier and return its result
+       *                         in addition to anything else that it needs to do (logging,
+       *                         timing, etc).
+       * @return Builder
+       */
+      public Builder<T> withRetryInterceptor(Function<Supplier<T>, T> retryInterceptor)
+      {
+         this.retryInterceptor = retryInterceptor;
          return this;
       }
 

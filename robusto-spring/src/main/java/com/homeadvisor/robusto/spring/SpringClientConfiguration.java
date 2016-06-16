@@ -15,6 +15,14 @@
  */
 package com.homeadvisor.robusto.spring;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.AnnotationIntrospector;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.MapperFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.introspect.JacksonAnnotationIntrospector;
+import com.fasterxml.jackson.datatype.joda.JodaModule;
+import com.fasterxml.jackson.module.jaxb.JaxbAnnotationIntrospector;
 import com.homeadvisor.robusto.ClientConfiguration;
 import com.homeadvisor.robusto.spring.config.SpringCommandProperties;
 import com.homeadvisor.robusto.spring.config.SpringThreadPoolProperties;
@@ -24,10 +32,16 @@ import com.netflix.hystrix.HystrixThreadPoolKey;
 import com.netflix.hystrix.HystrixThreadPoolProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.PropertyValue;
+import org.springframework.beans.PropertyValues;
+import org.springframework.beans.factory.BeanFactoryUtils;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
+import org.springframework.validation.DataBinder;
 
+import java.text.SimpleDateFormat;
 import java.util.Collections;
 import java.util.List;
 
@@ -256,6 +270,49 @@ public class SpringClientConfiguration extends ClientConfiguration
       return getProperty(getConfigPrefix() + ".client.command." + name.toLowerCase() + ".requestTimeout", getRequestTimeout());
    }
 
+   /**
+    * Allows customizing Jackson {@link ObjectMapper} per command. This just
+    * returns the same ObjectMapper as {@link #buildDefaultJacksonObjectMapper()}.
+    * @param commandName Command name.
+    * @return Configured ObjectMapper.
+    */
+   public ObjectMapper buildCustomJacksonObjectMapper(String commandName)
+   {
+      return buildDefaultJacksonObjectMapper();
+   }
+
+   /**
+    * Build a default Jackson ObjectMapper. The default implementation is to
+    * include non-null, ignore uknown properties on deserialization, and use
+    * the date format yyyy-MM-dd'T'HH:mm:ss.SSSZ.
+    * @return A Jackson ObjectMapper.
+    */
+   protected ObjectMapper buildDefaultJacksonObjectMapper()
+   {
+      /* Cant use unless Spring 4.x is being used throughout
+      return new Jackson2ObjectMapperBuilder()
+            .serializationInclusion(JsonInclude.Include.NON_NULL)
+            .failOnUnknownProperties(false)
+            .dateFormat(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ"))
+            .featuresToEnable(MapperFeature.USE_WRAPPER_NAME_AS_PROPERTY_NAME)
+            .annotationIntrospector(AnnotationIntrospector.pair(
+                  new JacksonAnnotationIntrospector(),
+                  new JaxbAnnotationIntrospector()))
+            .build();
+            */
+      ObjectMapper mapper = new ObjectMapper();
+      mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+      mapper.setDateFormat(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ"));
+      mapper.enable(MapperFeature.USE_WRAPPER_NAME_AS_PROPERTY_NAME);
+      mapper.registerModule(new JodaModule());
+
+      AnnotationIntrospector primary = new JacksonAnnotationIntrospector();
+      AnnotationIntrospector secondary = new JaxbAnnotationIntrospector();
+      mapper.setAnnotationIntrospector(AnnotationIntrospector.pair(primary, secondary));
+
+      return mapper;
+   }
+
    //
    // These are utility methods for getting config values from the Spring
    // environment.
@@ -391,6 +448,54 @@ public class SpringClientConfiguration extends ClientConfiguration
       {
          LOG.warn("Error getting value for property {}", name, e);
          return defaultValue;
+      }
+   }
+
+   private class EnvironmentPropertValues implements PropertyValues
+   {
+      private final Environment environment;
+
+      private final String prefix;
+
+      public EnvironmentPropertValues(Environment environment, String prefix)
+      {
+         this.environment = environment;
+         this.prefix = prefix;
+      }
+
+      @Override
+      public PropertyValue[] getPropertyValues()
+      {
+         return new PropertyValue[0];
+      }
+
+      @Override
+      public PropertyValue getPropertyValue(String propertyName)
+      {
+         if(contains(propertyName))
+         {
+            return new PropertyValue(propertyName, environment.getProperty(prefix + "." + propertyName));
+         }
+
+         return null;
+      }
+
+      @Override
+      public PropertyValues changesSince(PropertyValues old)
+      {
+         return null;
+      }
+
+      @Override
+      public boolean contains(String propertyName)
+      {
+         return environment.getProperty(prefix + "." + propertyName) != null;
+      }
+
+      @Override
+      public boolean isEmpty()
+      {
+         return false;
       }
    }
 }

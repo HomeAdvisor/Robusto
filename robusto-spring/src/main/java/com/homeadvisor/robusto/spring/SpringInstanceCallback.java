@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 HomeAdvisor, Inc.
+ * Copyright 2016 HomeAdvisor, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,10 @@
 package com.homeadvisor.robusto.spring;
 
 import com.homeadvisor.robusto.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageConversionException;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResponseErrorHandler;
 
@@ -33,6 +36,8 @@ import org.springframework.web.client.ResponseErrorHandler;
  */
 public abstract class SpringInstanceCallback<T> implements RemoteServiceCallback<T>
 {
+   private final static Logger LOG = LoggerFactory.getLogger(SpringInstanceCallback.class);
+
    private CommandContext ctx;
 
    public SpringInstanceCallback()
@@ -71,6 +76,7 @@ public abstract class SpringInstanceCallback<T> implements RemoteServiceCallback
 
       try
       {
+         LOG.debug("Running command {} with URL {}", getContext().getCommandName(), url);
          response = runWithUrl(url);
       }
       catch (HttpStatusCodeException hsce)
@@ -85,7 +91,12 @@ public abstract class SpringInstanceCallback<T> implements RemoteServiceCallback
             throw new NonRetryableApiCommandException("Local client error: " + hsce.getMessage(), hsce);
          }
       }
+      catch(HttpMessageConversionException e)
+      {
+         throw new NonRetryableApiCommandException("Invalid response from server: " + e.getMessage(), e);
+      }
 
+      LOG.debug("Returning response {}", response);
       return response;
    }
 

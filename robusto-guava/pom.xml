@@ -4,7 +4,7 @@
    <groupId>com.homeadvisor.robusto</groupId>
    <artifactId>robusto-guava</artifactId>
    <version>1.0.0</version>
-   <name>HomeAdvisor Robusto- Guava</name>
+   <name>HomeAdvisor Robusto - Guava</name>
    <description>Extension of API Client library that uses guava for command caching</description>
 
    <dependencies>

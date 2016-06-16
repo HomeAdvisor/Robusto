@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 HomeAdvisor, Inc.
+ * Copyright 2016 HomeAdvisor, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,13 +74,13 @@ public class RequestResponseLogInterceptor implements ClientHttpRequestIntercept
          logMsg.append("\n\n").append("--- Request ---\n");
          logMsg.append(request.getMethod()).append(" ").append(request.getURI().toString()).append("\n").append("\n");
          request.getHeaders().forEach((name, list) -> logMsg.append(name).append(": ").append(StringUtils.collectionToDelimitedString(list, ";")).append("\n"));
-         logMsg.append("\n").append(new String(body));
+         logMsg.append("\n").append(new String(body)).append("\n");
 
          //
          // Log response
          //
 
-         logMsg.append("--- Response ---\n");
+         logMsg.append("\n--- Response ---\n");
          logMsg.append(response.getRawStatusCode()).append(" ").append(response.getStatusText()).append("\n").append("\n");
          response.getHeaders().forEach((name, list) -> logMsg.append(name).append(": ").append(StringUtils.collectionToDelimitedString(list, ";")).append("\n"));
 
