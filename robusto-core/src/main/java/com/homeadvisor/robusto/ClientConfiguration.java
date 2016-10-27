@@ -27,8 +27,6 @@ import java.util.Map;
  * to plug in their own configuration providers as needed, as well as different
  * strategies for naming configuration options or additional confugration options
  * that make sense for their technology stack.
- * <br/><br/>
- *
  */
 public class ClientConfiguration
 {

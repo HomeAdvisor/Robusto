@@ -34,12 +34,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.PropertyValue;
 import org.springframework.beans.PropertyValues;
-import org.springframework.beans.factory.BeanFactoryUtils;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.http.MediaType;
-import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
-import org.springframework.validation.DataBinder;
 
 import java.text.SimpleDateFormat;
 import java.util.Collections;
@@ -284,7 +281,7 @@ public class SpringClientConfiguration extends ClientConfiguration
    /**
     * Build a default Jackson ObjectMapper. The default implementation is to
     * include non-null, ignore uknown properties on deserialization, and use
-    * the date format yyyy-MM-dd'T'HH:mm:ss.SSSZ.
+    * the date format yyyy-MM-dd'T'HH:mm:ssZ.
     * @return A Jackson ObjectMapper.
     */
    protected ObjectMapper buildDefaultJacksonObjectMapper()
@@ -293,7 +290,7 @@ public class SpringClientConfiguration extends ClientConfiguration
       return new Jackson2ObjectMapperBuilder()
             .serializationInclusion(JsonInclude.Include.NON_NULL)
             .failOnUnknownProperties(false)
-            .dateFormat(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ"))
+            .dateFormat(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ"))
             .featuresToEnable(MapperFeature.USE_WRAPPER_NAME_AS_PROPERTY_NAME)
             .annotationIntrospector(AnnotationIntrospector.pair(
                   new JacksonAnnotationIntrospector(),
@@ -302,7 +299,8 @@ public class SpringClientConfiguration extends ClientConfiguration
             */
       ObjectMapper mapper = new ObjectMapper();
       mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
-      mapper.setDateFormat(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ"));
+      mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+      mapper.setDateFormat(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ"));
       mapper.enable(MapperFeature.USE_WRAPPER_NAME_AS_PROPERTY_NAME);
       mapper.registerModule(new JodaModule());
 

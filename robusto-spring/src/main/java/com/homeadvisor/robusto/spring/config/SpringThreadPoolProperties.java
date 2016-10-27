@@ -96,7 +96,7 @@ public class SpringThreadPoolProperties extends HystrixThreadPoolProperties
             environment.getProperty(
                   configPrefix + commandName + ".coreSize",
                   Integer.class,
-                  super.coreSize().get()));
+                  environment.getProperty("hystrix.threadpool.default.coreSize", Integer.class, 5)));
    }
 
    @Override
